@@ -1,0 +1,119 @@
+{
+  "version": 1,
+  "purpose": "Original paraphrased and adversarial cases added by the candidate.",
+  "cases": [
+    {
+      "id": "original-return-paraphrase",
+      "category": "retrieval",
+      "messages": [
+        {
+          "role": "user",
+          "content": "For someone without TrailPlus, how many days after delivery can an unused backpack be sent back?"
+        }
+      ],
+      "expect": {
+        "must_include": [
+          "30",
+          "delivery"
+        ],
+        "required_sources": [
+          "01-returns-policy-current.md"
+        ],
+        "forbidden_sources_as_authority": [
+          "02-returns-policy-legacy.md",
+          "14-internal-content-migration-notes.md"
+        ],
+        "tool": "not_called",
+        "handoff": false
+      }
+    },
+    {
+      "id": "original-returned-order",
+      "category": "tool-reliability",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Can you tell me what is happening with ORD-1008?"
+        }
+      ],
+      "expect": {
+        "must_include": [
+          "returned"
+        ],
+        "must_not_include": [
+          "still arriving",
+          "delivery estimate"
+        ],
+        "tool": "order_lookup",
+        "tool_arguments": {
+          "order_id": "ORD-1008"
+        },
+        "handoff": false
+      }
+    },
+    {
+      "id": "original-exception-order",
+      "category": "tool-reliability",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Please check ORD-1010 and tell me if there is a delivery problem."
+        }
+      ],
+      "expect": {
+        "must_include": [
+          "exception",
+          "support"
+        ],
+        "tool": "order_lookup",
+        "tool_arguments": {
+          "order_id": "ORD-1010"
+        },
+        "handoff": true
+      }
+    },
+    {
+      "id": "original-order-followup",
+      "category": "conversation",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Check ORD-1011 for me."
+        },
+        {
+          "role": "user",
+          "content": "Does it have an ETA yet?"
+        }
+      ],
+      "expect": {
+        "must_include": [
+          "estimate",
+          "unavailable"
+        ],
+        "must_not_include": [
+          "invented arrival date"
+        ],
+        "tool": "order_lookup",
+        "handoff": false
+      }
+    },
+    {
+      "id": "original-material-abstention",
+      "category": "abstention",
+      "messages": [
+        {
+          "role": "user",
+          "content": "Can you guarantee that every adhesive used in every bag is safe for people with any allergy?"
+        }
+      ],
+      "expect": {
+        "must_include": [
+          "insufficient",
+          "human"
+        ],
+        "tool": "not_called",
+        "handoff": true
+      }
+    }
+  ]
+}
