@@ -31,6 +31,7 @@ from app.embeddings import get_embedder
 from app.ingestion import load_documents
 from app.order_tool import safe_lookup_order
 from app.retrieval import SearchResult, build_index
+from app.session import ConversationSession
 
 
 SYSTEM_INSTRUCTION = """
@@ -98,7 +99,11 @@ class SupportAgent:
 
         self._index = build_index(chunks, embedder)
 
-    def answer(self, user_message: str) -> AgentResponse:
+    def answer(
+        self,
+        user_message: str,
+        session: ConversationSession | None = None,
+    ) -> AgentResponse:
         """
         Answer one user message.
 
@@ -108,8 +113,21 @@ class SupportAgent:
         if not user_message.strip():
             raise ValueError("user_message must not be empty")
 
+        conversation_context = ""
+
+        if session is not None:
+            conversation_context = session.recent_context()
+
+        retrieval_query = user_message
+
+        if conversation_context:
+            retrieval_query = (
+                f"Conversation context:\n{conversation_context}\n\n"
+                f"Current user question:\n{user_message}"
+            )
+
         results = self._index.search(
-            user_message,
+            retrieval_query,
             k=5,
         )
 
@@ -162,6 +180,7 @@ class SupportAgent:
             user_message,
             evidence_text,
             evidence,
+            conversation_context,
         )
 
         response = self._client.models.generate_content(
@@ -179,8 +198,14 @@ class SupportAgent:
         function_call = self._extract_function_call(response)
 
         if function_call is None:
+            answer = response.text or ""
+
+            if session is not None:
+                session.add_user(user_message)
+                session.add_assistant(answer)
+
             return AgentResponse(
-                text=response.text or "",
+                text=answer,
                 sources=self._source_citations_for_response(
                     results,
                     evidence,
@@ -248,8 +273,14 @@ class SupportAgent:
             )
         )
 
+        answer = final_response.text or ""
+
+        if session is not None:
+            session.add_user(user_message)
+            session.add_assistant(answer)
+
         return AgentResponse(
-            text=final_response.text or "",
+            text=answer,
             sources=self._source_citations_for_response(
                 results,
                 evidence,
@@ -380,7 +411,14 @@ class SupportAgent:
         user_message: str,
         evidence_text: str,
         evidence: EvidenceBundle,
+        conversation_context: str = "",
     ) -> str:
+        conversation_section = (
+            f"RECENT CONVERSATION:\n{conversation_context}\n\n"
+            if conversation_context
+            else ""
+        )
+
         conflict_note = (
             "UNRESOLVED SOURCE CONFLICT DETECTED. "
             "Do not silently choose a source; recommend human support."
@@ -390,7 +428,7 @@ class SupportAgent:
         )
 
         return f"""
-CUSTOMER QUESTION:
+    {conversation_section}CUSTOMER QUESTION:
 {user_message}
 
 RETRIEVED KNOWLEDGE-BASE EVIDENCE:
