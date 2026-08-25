@@ -1,0 +1,16 @@
+# --- LLM provider ---
+google-genai>=1.0.0
+
+# --- Embeddings (local, no API key required) ---
+sentence-transformers>=3.0.0
+
+# --- Vector index ---
+faiss-cpu>=1.8.0
+
+# --- App / API ---
+flask>=3.0.0
+python-dotenv>=1.0.0
+numpy>=1.26.0
+
+# --- Testing / evaluation ---
+pytest>=8.0.0

@@ -1,0 +1,22 @@
+# Environment / secrets
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+.venv/
+venv/
+*.egg-info/
+
+# Built indexes / caches (derived data, rebuildable from knowledge-base/)
+index/
+*.faiss
+*.pkl
+
+# Logs
+logs/*.jsonl
+logs/*.log
+
+# OS
+.DS_Store
