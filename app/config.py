@@ -41,7 +41,7 @@ class Config:
 
     # --- LLM provider (Gemini) ---
     gemini_api_key: str = os.environ.get("GEMINI_API_KEY", "")
-    gemini_model: str = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+    gemini_model: str = os.environ.get("GEMINI_MODEL", "gemini-3.6-flash")
 
     # --- Embeddings (local sentence-transformers model, no API key needed) ---
     embedding_model: str = os.environ.get(
