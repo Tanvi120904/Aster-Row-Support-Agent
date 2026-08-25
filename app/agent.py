@@ -19,6 +19,7 @@ Conversation/session memory is intentionally addressed in Phase 11.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from typing import Any
 
 from google import genai
@@ -29,6 +30,7 @@ from app.config import Config, settings
 from app.evidence import EvidenceBundle, analyze_evidence
 from app.embeddings import get_embedder
 from app.ingestion import load_documents
+from app.logging_utils import log_event
 from app.order_tool import safe_lookup_order
 from app.retrieval import SearchResult, build_index
 from app.session import ConversationSession
@@ -200,6 +202,26 @@ class SupportAgent:
         if function_call is None:
             answer = response.text or ""
 
+            log_event(
+                {
+                    "timestamp": datetime.now(timezone.utc).isoformat(),
+                    "user_message": user_message,
+                    "retrieved_sources": [
+                        {
+                            "filename": result.chunk.source_filename,
+                            "heading": result.chunk.heading,
+                            "score": result.score,
+                        }
+                        for result in results
+                    ],
+                    "tool": None,
+                    "tool_arguments": None,
+                    "handoff": evidence.handoff,
+                    "response": answer,
+                },
+                path=self._config.logs_dir / "agent.jsonl",
+            )
+
             if session is not None:
                 session.add_user(user_message)
                 session.add_assistant(answer)
@@ -278,6 +300,27 @@ class SupportAgent:
         if session is not None:
             session.add_user(user_message)
             session.add_assistant(answer)
+
+        log_event(
+            {
+                "timestamp": datetime.now(timezone.utc).isoformat(),
+                "user_message": user_message,
+                "retrieved_sources": [
+                    {
+                        "filename": result.chunk.source_filename,
+                        "heading": result.chunk.heading,
+                        "score": result.score,
+                    }
+                    for result in results
+                ],
+                "tool": function_name,
+                "tool_arguments": function_args,
+                "tool_found": bool(tool_result.get("found")),
+                "handoff": evidence.handoff or order_handoff,
+                "response": answer,
+            },
+            path=self._config.logs_dir / "agent.jsonl",
+        )
 
         return AgentResponse(
             text=answer,
