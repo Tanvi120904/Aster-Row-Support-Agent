@@ -221,3 +221,151 @@ def test_tool_output_contains_no_internal_section():
     assert "risk_score" not in result["order"]
     assert "warehouse_note" not in result["order"]
     assert "support_tags" not in result["order"]
+
+def test_private_field_requests_are_ignored_even_with_nested_paths():
+    result = lookup_order(
+        "ORD-1007",
+        fields=[
+            "customer",
+            "customer.name",
+            "customer.email",
+            "customer.shipping_address",
+            "internal",
+            "internal.risk_score",
+            "internal.warehouse_note",
+            "internal.support_tags",
+        ],
+        data_path=ORDERS_PATH,
+    )
+
+    order = result["order"]
+
+    assert "customer" not in order
+    assert "internal" not in order
+    assert "risk_score" not in order
+    assert "warehouse_note" not in order
+    assert "support_tags" not in order
+
+
+def test_order_id_near_miss_is_not_guessed():
+    result = safe_lookup_order(
+        "ORD-1007X",
+        data_path=ORDERS_PATH,
+    )
+
+    assert result["found"] is False
+    assert result["error_type"] == "invalid_order_id"
+
+
+def test_order_lookup_does_not_return_raw_customer_object():
+    result = lookup_order(
+        "ORD-1001",
+        data_path=ORDERS_PATH,
+    )
+
+    order = result["order"]
+
+    assert "customer" not in order
+
+    result_text = str(result)
+
+    assert "Maya Reed" not in result_text
+    assert "maya.reed@example.test" not in result_text
+    assert "18 Cedar Lane" not in result_text
+
+
+def test_order_lookup_does_not_return_raw_internal_object():
+    result = lookup_order(
+        "ORD-1005",
+        data_path=ORDERS_PATH,
+    )
+
+    order = result["order"]
+
+    assert "internal" not in order
+
+    result_text = str(result)
+
+    assert "risk_score" not in result_text
+    assert "warehouse_note" not in result_text
+    assert "support-tags" not in result_text
+    assert "$100 coupon" not in result_text
+
+
+def test_cancelled_order_status_takes_precedence_over_stale_logistics():
+    result = lookup_order(
+        "ORD-1004",
+        data_path=ORDERS_PATH,
+    )
+
+    order = result["order"]
+
+    assert order["status"] == "cancelled"
+    assert order["customer_safe_message"] == (
+        "The order was cancelled and will not be shipped."
+    )
+
+    assert "carrier" not in order
+    assert "tracking_number" not in order
+    assert "estimated_delivery" not in order
+
+
+def test_returned_order_status_takes_precedence_over_old_delivery_fields():
+    result = lookup_order(
+        "ORD-1008",
+        data_path=ORDERS_PATH,
+    )
+
+    order = result["order"]
+
+    assert order["status"] == "returned"
+    assert "carrier" not in order
+    assert "tracking_number" not in order
+    assert "estimated_delivery" not in order
+
+
+def test_shipped_order_without_eta_is_not_given_a_computed_eta():
+    result = lookup_order(
+        "ORD-1011",
+        data_path=ORDERS_PATH,
+    )
+
+    order = result["order"]
+
+    assert order["status"] == "shipped"
+    assert order["estimated_delivery"] is None
+    assert "estimate is not currently available" in (
+        order["customer_safe_message"]
+    )
+
+
+def test_exception_order_is_explicitly_marked_for_handoff():
+    result = lookup_order(
+        "ORD-1010",
+        data_path=ORDERS_PATH,
+    )
+
+    order = result["order"]
+
+    assert order["status"] == "exception"
+    assert order["handoff_required"] is True
+
+
+def test_tool_never_claims_an_action_was_performed():
+    result = lookup_order(
+        "ORD-1007",
+        data_path=ORDERS_PATH,
+    )
+
+    result_text = str(result).lower()
+
+    forbidden_action_claims = (
+        "cancelled successfully",
+        "refund completed",
+        "replacement created",
+        "address changed",
+        "escalation created",
+    )
+
+    for phrase in forbidden_action_claims:
+        assert phrase not in result_text

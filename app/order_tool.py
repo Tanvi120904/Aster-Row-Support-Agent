@@ -33,6 +33,13 @@ SAFE_FIELDS = {
     "estimated_delivery",
     "customer_safe_message",
 }
+# These names are explicitly forbidden even if a caller tries to request them.
+#
+# The application never permits arbitrary nested field access.
+FORBIDDEN_FIELD_PREFIXES = (
+    "customer",
+    "internal",
+)
 
 # Fields that can become misleading when an order has been cancelled or
 # returned. We omit them rather than risk presenting stale operational data.
@@ -118,17 +125,22 @@ def _safe_order(
     """
     Apply the customer-safe field allowlist.
 
-    The final output always includes order_id, status, and
-    customer_safe_message because these are foundational to interpreting
-    the returned order.
-
-    `requested_fields` can further reduce the output, but it can never expand
-    beyond SAFE_FIELDS.
+    The caller can request a subset of safe fields, but requesting unsafe
+    fields never expands what the tool can expose.
     """
 
     allowed = SAFE_FIELDS if requested_fields is None else (
         requested_fields & SAFE_FIELDS
     )
+
+    # Never allow explicitly private/nested fields through even if a future
+    # SAFE_FIELDS change accidentally includes a prefix-like name.
+    if requested_fields:
+        allowed = {
+            field
+            for field in allowed
+            if not _is_forbidden_requested_field(field)
+        }
 
     # These fields are essential for interpreting any result safely.
     allowed |= {
@@ -142,7 +154,8 @@ def _safe_order(
     status = order.get("status")
 
     for field in sorted(allowed):
-        if field in {"customer", "internal"}:
+        # Defense in depth.
+        if _is_forbidden_requested_field(field):
             continue
 
         # Items require nested allowlisting.
@@ -154,19 +167,33 @@ def _safe_order(
             ]
             continue
 
-        # Don't expose stale delivery information as current for cancelled
-        # or returned orders.
+        # Cancelled and returned orders may contain stale logistics fields.
         if status in {"cancelled", "returned"}:
             if field in STALE_LOGISTICS_FIELDS:
                 continue
 
         result[field] = order.get(field)
 
-    # For exception orders, expose a deterministic application-level signal.
-    # This is not customer data from the file; it is tool interpretation.
     result["handoff_required"] = status == "exception"
 
     return result
+
+def _is_forbidden_requested_field(field: str) -> bool:
+    """
+    Return True when a caller attempts to request private/internal data.
+
+    We reject the request semantically rather than merely ignoring a few
+    currently-known field names. This protects newly-added nested private
+    fields too.
+    """
+
+    normalized = field.strip().lower()
+
+    return normalized == "customer" or normalized.startswith(
+        "customer."
+    ) or normalized == "internal" or normalized.startswith(
+        "internal."
+    )
 
 
 def lookup_order(
