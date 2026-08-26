@@ -11,6 +11,11 @@ The implementation prioritizes reliability, groundedness, safe abstention, retri
 quality, and data privacy over UI complexity. It favors small, deterministic,
 auditable components over production infrastructure or UI polish.
 
+## 🎥 Demo
+
+A short demonstration of the Aster & Row Support Agent, showing the chatbot interface,
+RAG-based responses, source citations, and order-support workflow.
+
 ![Aster & Row Support Agent Demo](demo/aster-row-support-agent.gif)
 
 ## Stack
